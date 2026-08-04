@@ -13,7 +13,7 @@ import { NostrLoginProvider } from '@nostrify/react/login';
 import { AppProvider } from '@/components/AppProvider';
 import { AppConfig } from '@/contexts/AppContext';
 import AppRouter from './AppRouter';
-import { DEFAULT_RELAYS } from '@/lib/relays';
+import { DEFAULT_RELAYS, RELAY_PRESETS } from '@/lib/relays';
 
 const head = createHead({
   plugins: [
@@ -36,14 +36,7 @@ const defaultConfig: AppConfig = {
   relayUrls: DEFAULT_RELAYS,
 };
 
-const presetRelays = [
-  { url: 'wss://relay.damus.io', name: 'Damus' },
-  { url: 'wss://relay.plebeian.market', name: 'Plebeian Market' },
-  { url: 'wss://nos.lol', name: 'nos.lol' },
-  { url: 'wss://relay.nostr.band', name: 'Nostr.Band' },
-  { url: 'wss://relay.primal.net', name: 'Primal' },
-  { url: 'wss://ditto.pub/relay', name: 'Ditto' },
-];
+const presetRelays = RELAY_PRESETS.map((r) => ({ url: r.url, name: r.name }));
 
 function AppContent() {
   return (

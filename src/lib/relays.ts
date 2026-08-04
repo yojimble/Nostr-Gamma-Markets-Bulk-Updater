@@ -1,10 +1,27 @@
 import type { NPool } from '@nostrify/nostrify';
 
-export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.plebeian.market',
-  'wss://nos.lol',
-];
+/**
+ * The relays this app knows about: Plebeian Market's main relay plus its
+ * DEFAULT_PUBLIC_RELAYS (the relays it publishes listings to), and Primal.
+ * Single source of truth — `DEFAULT_RELAYS` and the RelaySelector presets are
+ * both derived from this, so they can't drift apart.
+ */
+export const RELAY_PRESETS = [
+  { url: 'wss://relay.plebeian.market', name: 'Plebeian Market' },
+  { url: 'wss://sendit.nosflare.com', name: 'Sendit' },
+  { url: 'wss://nostr.mom', name: 'nostr.mom' },
+  { url: 'wss://nos.lol', name: 'nos.lol' },
+  { url: 'wss://relay.nostr.net', name: 'nostr.net' },
+  { url: 'wss://relay.damus.io', name: 'Damus' },
+  { url: 'wss://relay.minibits.cash', name: 'Minibits' },
+  { url: 'wss://relay.primal.net', name: 'Primal' },
+] as const;
+
+/**
+ * Read/write set used by default. A merchant's inventory is found even when
+ * their NIP-65 relay list points somewhere else.
+ */
+export const DEFAULT_RELAYS: string[] = RELAY_PRESETS.map((r) => r.url);
 
 /**
  * Fetch the user's relay list from their NIP-65 profile (kind 10002).

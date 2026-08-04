@@ -37,7 +37,7 @@ import {
   type ListingRow,
   type ListingStatus,
 } from '@/lib/gamma';
-import { fetchProfileRelays } from '@/lib/relays';
+import { DEFAULT_RELAYS, fetchProfileRelays } from '@/lib/relays';
 import { useNostr } from '@nostrify/react';
 
 type SortKey = 'updated' | 'title' | 'price' | 'stock';
@@ -78,18 +78,27 @@ export default function BulkEditorPage() {
     description: 'Bulk-edit your Nostr marketplace listings in a spreadsheet.',
   });
 
-  // On login, adopt the user's published relays from their NIP-65 relay list
-  // (kind 10002). All reads and publishes go to those relays; the bundled
-  // defaults are only a bootstrap for finding the relay list itself.
+  // On login, add the user's published relays from their NIP-65 relay list
+  // (kind 10002) to the set we query. These are merged with the bundled
+  // defaults rather than replacing them: relay lists are often stale or list
+  // relays that never received the user's listings, and dropping the defaults
+  // in that case makes an otherwise healthy inventory disappear.
   const relayImportAttempted = useRef<string>('');
   useEffect(() => {
     if (!user || relayImportAttempted.current === user.pubkey) return;
     relayImportAttempted.current = user.pubkey;
     fetchProfileRelays(nostr, user.pubkey)
       .then((relays) => {
-        if (relays.length === 0 || relays.join() === config.relayUrls.join()) return;
-        updateConfig((prev) => ({ ...prev, relayUrls: relays }));
-        toast.success(`Using ${relays.length} relay${relays.length === 1 ? '' : 's'} from your profile.`);
+        // DEFAULT_RELAYS are re-added here as well, to heal configs saved by
+        // an earlier version that overwrote them with the profile list.
+        const merged = [...new Set([...config.relayUrls, ...DEFAULT_RELAYS, ...relays])];
+        const added = merged.filter((r) => !config.relayUrls.includes(r));
+        if (added.length === 0) return;
+        updateConfig((prev) => ({
+          ...prev,
+          relayUrls: [...new Set([...prev.relayUrls, ...DEFAULT_RELAYS, ...relays])],
+        }));
+        toast.success(`Now reading from ${merged.length} relays.`);
       })
       .catch(() => {});
   }, [user, config.relayUrls, nostr, updateConfig]);
