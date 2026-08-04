@@ -62,6 +62,17 @@ export default function BulkEditorPage() {
   // would otherwise re-serve them on the next refetch.
   const deletedIds = useRef<Set<string>>(new Set());
 
+  // Switching accounts must not leak one user's listings into another's view.
+  // Reset during render (before paint) so the table never shows the previous
+  // account's rows while the new account's query is in flight.
+  const [loadedPubkey, setLoadedPubkey] = useState(user?.pubkey);
+  if (loadedPubkey !== user?.pubkey) {
+    setLoadedPubkey(user?.pubkey);
+    setRows([]);
+    setSelected(new Set());
+    deletedIds.current = new Set();
+  }
+
   useSeoMeta({
     title: 'Gamma Markets Bulk Updater',
     description: 'Bulk-edit your Nostr marketplace listings in a spreadsheet.',
@@ -86,7 +97,7 @@ export default function BulkEditorPage() {
   // Merge fetched listings into local rows without clobbering unsaved edits
   // or unpublished duplicates.
   useEffect(() => {
-    if (!listings) return;
+    if (!listings || !user) return;
     setRows((prev) => {
       const prevById = new Map(prev.map((r) => [r.id, r]));
       const seen = new Set<string>();
@@ -94,6 +105,7 @@ export default function BulkEditorPage() {
       for (const ev of listings) {
         const id = tagValue(ev.tags, 'd');
         if (id === undefined || deletedIds.current.has(id)) continue;
+        if (ev.pubkey !== user.pubkey) continue;
         seen.add(id);
         const existing = prevById.get(id);
         const keepExisting =
@@ -105,11 +117,14 @@ export default function BulkEditorPage() {
       // Keep rows the relays didn't return: unpublished duplicates, edits in
       // flight, and rows we just published that relays haven't served yet.
       for (const r of prev) {
-        if (!seen.has(r.id)) next.push(r);
+        if (seen.has(r.id)) continue;
+        // ...but never carry over rows belonging to another account.
+        if (r.original && r.original.pubkey !== user.pubkey) continue;
+        next.push(r);
       }
       return next;
     });
-  }, [listings]);
+  }, [listings, user]);
 
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
