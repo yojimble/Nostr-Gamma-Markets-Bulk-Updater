@@ -157,11 +157,19 @@ export function ListingsTable({
             const dirty = isRowDirty(row);
             const image = row.data.images[0]?.url;
             const isSelected = selected.has(row.id);
+            const isHidden = row.data.status === 'hidden';
             return (
               <TableRow
                 key={row.id}
                 data-state={isSelected ? 'selected' : undefined}
-                className={cn(dirty && 'bg-amber-50 dark:bg-amber-950/30')}
+                className={cn(
+                  dirty && 'bg-amber-50 dark:bg-amber-950/30',
+                  // Hidden listings are dimmed, not disabled — fading is purely
+                  // visual, so every control in the row stays usable. Hovering
+                  // or focusing anything inside restores full contrast.
+                  isHidden &&
+                    'opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100',
+                )}
               >
                 <TableCell>
                   <Checkbox

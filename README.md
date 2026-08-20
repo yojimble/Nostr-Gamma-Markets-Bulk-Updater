@@ -8,6 +8,11 @@ NIP-99 classifieds / [Gamma Markets spec](https://github.com/GammaMarkets/market
 - Sign in with a NIP-07 browser extension or a NIP-46 bunker
 - Imports all your published kind 30402 listings and shows them in an editable spreadsheet
 - Inline-edit title, price, currency, stock, status, categories, location and summary per row
+- **Images** — click a row's thumbnail to open the image editor:
+  - Upload a file (via Blossom) or paste an image URL
+  - Reorder with the up/down arrows — the first image is the listing's main image
+  - Replace or remove individual images; pixel dimensions from an upload are kept
+    in the `image` tag, and the sorting field is rewritten on publish
 - Bulk toolbar for selected rows:
   - **Title** — find & replace, set, prefix, suffix
   - **Categories** — add, remove or replace `t` tags
@@ -18,7 +23,7 @@ NIP-99 classifieds / [Gamma Markets spec](https://github.com/GammaMarkets/market
   - **Shipping** — apply your published kind 30406 shipping options (`shipping_option` tags)
   - **Duplicate** — clone listings; every new listing gets a fresh unique `d` identifier (UUID)
 - Nothing is published until you hit **Publish** — edited rows are highlighted, and
-  unmanaged tags (images, specs, weight, geohash, …) are preserved verbatim
+  unmanaged tags (specs, weight, geohash, …) are preserved verbatim
 - Republishing uses the same `d` tag, so relays replace the prior version automatically
 
 ## Built with
