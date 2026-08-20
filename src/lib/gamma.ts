@@ -21,6 +21,16 @@ export type ListingStatus = 'on-sale' | 'hidden' | 'pre-order';
 
 export const LISTING_STATUSES: ListingStatus[] = ['on-sale', 'hidden', 'pre-order'];
 
+/**
+ * One `image` tag: `["image", <url>, <dimensions>, <sorting-order>]`.
+ * `dimensions` is "<width>x<height>" or an empty string when unknown; the
+ * sorting order is not stored, since array position defines it.
+ */
+export interface ListingImage {
+  url: string;
+  dimensions: string;
+}
+
 /** The editable fields of a listing, decoded from event tags. */
 export interface ListingData {
   title: string;
@@ -38,6 +48,8 @@ export interface ListingData {
   description: string;
   /** Address strings like "30406:<pubkey>:<d-tag>". */
   shippingRefs: string[];
+  /** Product images, in display order — the first one is the primary image. */
+  images: ListingImage[];
 }
 
 /** One row of the spreadsheet. */
@@ -63,8 +75,25 @@ export function tagValues(tags: string[][], name: string): string[] {
   return tags.filter(([t]) => t === name).map(([, v]) => v).filter((v): v is string => v !== undefined);
 }
 
-export function firstImage(tags: string[][]): string | undefined {
-  return tagValue(tags, 'image');
+/**
+ * Read `image` tags in display order. The spec sorts by the optional 4th
+ * element (lowest to highest, with no fixed starting value); tags without one
+ * keep their position in the tag list.
+ */
+export function parseImages(tags: string[][]): ListingImage[] {
+  return tags
+    .filter(([name, url]) => name === 'image' && !!url)
+    .map(([, url, dimensions, order], index) => {
+      const sort = Number(order);
+      return {
+        url,
+        dimensions: dimensions ?? '',
+        sort: order && Number.isFinite(sort) ? sort : index,
+        index,
+      };
+    })
+    .sort((a, b) => a.sort - b.sort || a.index - b.index)
+    .map(({ url, dimensions }) => ({ url, dimensions }));
 }
 
 function readStatus(tags: string[][]): ListingStatus {
@@ -90,6 +119,7 @@ export function parseListing(event: NostrEvent): ListingData {
     summary: tagValue(event.tags, 'summary') ?? '',
     description: event.content,
     shippingRefs: tagValues(event.tags, 'shipping_option'),
+    images: parseImages(event.tags),
   };
 }
 
@@ -105,7 +135,7 @@ export function splitCategories(categories: string): string[] {
 /** Tag names owned by the editor — stripped and re-written on serialize. */
 const MANAGED_TAGS = new Set([
   'title', 'price', 'stock', 'quantity', 'status', 'visibility',
-  't', 'location', 'summary', 'shipping_option', 'd', 'client',
+  't', 'location', 'summary', 'shipping_option', 'd', 'client', 'image',
 ]);
 
 /**
@@ -145,7 +175,17 @@ export function serializeListing(row: ListingRow): string[][] {
     tags.push(['shipping_option', ref]);
   }
 
+  // Array position is the source of truth for image order; the spec's sorting
+  // field is rewritten as a dense 1-based sequence.
+  data.images.forEach((img, i) => {
+    tags.push(['image', img.url, img.dimensions, String(i + 1)]);
+  });
+
   return tags;
+}
+
+function serializeImages(images: ListingImage[]): string {
+  return images.map((i) => `${i.url}\u0000${i.dimensions}`).join('\n');
 }
 
 export function isRowDirty(row: ListingRow): boolean {
@@ -163,8 +203,18 @@ export function isRowDirty(row: ListingRow): boolean {
     a.location !== b.location ||
     a.summary !== b.summary ||
     a.description !== b.description ||
-    a.shippingRefs.join('\n') !== b.shippingRefs.join('\n')
+    a.shippingRefs.join('\n') !== b.shippingRefs.join('\n') ||
+    serializeImages(a.images) !== serializeImages(b.images)
   );
+}
+
+/** Copy listing data so edits to one row never mutate its `base` snapshot. */
+export function cloneListingData(data: ListingData): ListingData {
+  return {
+    ...data,
+    shippingRefs: [...data.shippingRefs],
+    images: data.images.map((i) => ({ ...i })),
+  };
 }
 
 export function eventToRow(event: NostrEvent): ListingRow {
@@ -173,8 +223,8 @@ export function eventToRow(event: NostrEvent): ListingRow {
     id: tagValue(event.tags, 'd') ?? '',
     original: event,
     sourceTags: event.tags,
-    base: { ...data, shippingRefs: [...data.shippingRefs] },
-    data: { ...data, shippingRefs: [...data.shippingRefs] },
+    base: cloneListingData(data),
+    data: cloneListingData(data),
     isNew: false,
   };
 }
@@ -186,15 +236,14 @@ export function eventToRow(event: NostrEvent): ListingRow {
  */
 export function duplicateRow(row: ListingRow): ListingRow {
   const data: ListingData = {
-    ...row.data,
+    ...cloneListingData(row.data),
     title: row.data.title ? `${row.data.title} (copy)` : '(copy)',
-    shippingRefs: [...row.data.shippingRefs],
   };
   return {
     id: crypto.randomUUID(),
     original: undefined,
     sourceTags: row.sourceTags,
-    base: { ...data, shippingRefs: [...data.shippingRefs] },
+    base: cloneListingData(data),
     data,
     isNew: true,
   };

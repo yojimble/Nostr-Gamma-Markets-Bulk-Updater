@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, ImageOff, Truck } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -22,10 +23,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { ImageEditor } from './ImageEditor';
 import { ShippingPicker } from './ShippingPicker';
 import {
   LISTING_STATUSES,
-  firstImage,
   isRowDirty,
   type ListingData,
   type ListingRow,
@@ -42,6 +43,8 @@ interface ListingsTableProps {
   onCellChange: (id: string, patch: Partial<ListingData>) => void;
   onToggleShipping: (id: string, ref: string, checked: boolean) => void;
   onDuplicateRow: (id: string) => void;
+  /** Pixels of fixed UI (the publish bar) covering the bottom of the viewport. */
+  bottomOffset?: number;
 }
 
 const cellInput =
@@ -57,12 +60,74 @@ export function ListingsTable({
   onCellChange,
   onToggleShipping,
   onDuplicateRow,
+  bottomOffset = 0,
 }: ListingsTableProps) {
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const someSelected = rows.some((r) => selected.has(r.id));
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  // The element that actually scrolls sideways — resolved in the effect below.
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
+  // Set while mirroring one element's scroll onto the other, so the resulting
+  // scroll event doesn't bounce straight back.
+  const syncing = useRef(false);
+  const [bar, setBar] = useState({ show: false, left: 0, width: 0, content: 0 });
+
+  const mirror = useCallback((from: HTMLDivElement | null, to: HTMLDivElement | null) => {
+    if (!from || !to || syncing.current) return;
+    syncing.current = true;
+    to.scrollLeft = from.scrollLeft;
+    requestAnimationFrame(() => { syncing.current = false; });
+  }, []);
+
+  // The table's own scrollbar sits at the bottom of a very tall element, so it
+  // is off-screen whenever the page is scrolled anywhere but the end. Mirror it
+  // into a bar pinned to the viewport while that's the case.
+  useEffect(() => {
+    // shadcn's <Table> renders its own `overflow-auto` wrapper around the
+    // <table>; that wrapper — not our container — is what scrolls.
+    const el = containerRef.current?.firstElementChild;
+    if (!(el instanceof HTMLDivElement)) return;
+    scrollerRef.current = el;
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      const floor = window.innerHeight - bottomOffset;
+      setBar({
+        // Only while the real scrollbar is out of view and there is overflow.
+        show: el.scrollWidth > el.clientWidth + 1 && rect.bottom > floor && rect.top < floor,
+        left: rect.left,
+        width: rect.width,
+        content: el.scrollWidth,
+      });
+    };
+    const onScroll = () => mirror(el, barRef.current);
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [bottomOffset, mirror, rows.length]);
+
+  // Adopt the table's current offset the moment the floating bar mounts.
+  const attachBar = useCallback((node: HTMLDivElement | null) => {
+    barRef.current = node;
+    if (node && scrollerRef.current) node.scrollLeft = scrollerRef.current.scrollLeft;
+  }, []);
+
   return (
-    <div className="rounded-lg border overflow-x-auto">
+    <>
+    <div ref={containerRef} className="rounded-lg border overflow-hidden">
       <Table className="min-w-[1400px]">
         <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
           <TableRow className="hover:bg-transparent">
@@ -90,7 +155,7 @@ export function ListingsTable({
         <TableBody>
           {rows.map((row) => {
             const dirty = isRowDirty(row);
-            const image = firstImage(row.sourceTags);
+            const image = row.data.images[0]?.url;
             const isSelected = selected.has(row.id);
             return (
               <TableRow
@@ -106,13 +171,32 @@ export function ListingsTable({
                   />
                 </TableCell>
                 <TableCell>
-                  <div className="relative h-9 w-9 rounded overflow-hidden bg-muted flex items-center justify-center">
-                    {image ? (
-                      <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
-                    ) : (
-                      <ImageOff className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="relative h-9 w-9 rounded overflow-hidden bg-muted flex items-center justify-center ring-offset-background hover:ring-2 hover:ring-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        title="Edit images"
+                      >
+                        {image ? (
+                          <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <ImageOff className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        {row.data.images.length > 1 && (
+                          <span className="absolute bottom-0 right-0 rounded-tl bg-black/70 px-1 text-[9px] leading-3 tabular-nums text-white">
+                            {row.data.images.length}
+                          </span>
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96" align="start">
+                      <ImageEditor
+                        images={row.data.images}
+                        onChange={(images) => onCellChange(row.id, { images })}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
@@ -249,5 +333,22 @@ export function ListingsTable({
         </TableBody>
       </Table>
     </div>
+
+    {bar.show && (
+      <div
+        className="fixed z-30"
+        style={{ left: bar.left, width: bar.width, bottom: bottomOffset }}
+      >
+        <div
+          ref={attachBar}
+          onScroll={() => mirror(barRef.current, scrollerRef.current)}
+          className="floating-scrollbar overflow-x-scroll overflow-y-hidden rounded-t border-x border-t bg-background/90 backdrop-blur"
+          aria-hidden
+        >
+          <div style={{ width: bar.content, height: 1 }} />
+        </div>
+      </div>
+    )}
+    </>
   );
 }

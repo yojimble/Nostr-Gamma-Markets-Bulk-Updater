@@ -27,6 +27,7 @@ import { useUserListings } from '@/hooks/useUserListings';
 import { useUserShippingOptions } from '@/hooks/useUserShippingOptions';
 import {
   LISTING_KIND,
+  cloneListingData,
   duplicateRow,
   eventToRow,
   isRowDirty,
@@ -58,6 +59,9 @@ export default function BulkEditorPage() {
   const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // Height of the sticky publish bar, so the table's floating scrollbar can
+  // rest on top of it instead of hiding underneath.
+  const [publishBarHeight, setPublishBarHeight] = useState(0);
   // Listings deleted this session — some relays ignore NIP-09 requests and
   // would otherwise re-serve them on the next refetch.
   const deletedIds = useRef<Set<string>>(new Set());
@@ -339,7 +343,7 @@ export default function BulkEditorPage() {
     setRows((prev) =>
       prev
         .filter((r) => !r.isNew)
-        .map((r) => ({ ...r, data: { ...r.base, shippingRefs: [...r.base.shippingRefs] } })),
+        .map((r) => ({ ...r, data: cloneListingData(r.base) })),
     );
     setSelected(new Set());
     toast.info('Changes discarded.');
@@ -370,7 +374,7 @@ export default function BulkEditorPage() {
                   ...r,
                   original: event,
                   sourceTags: event.tags,
-                  base: { ...r.data, shippingRefs: [...r.data.shippingRefs] },
+                  base: cloneListingData(r.data),
                   isNew: false,
                 }
               : r,
@@ -546,12 +550,16 @@ export default function BulkEditorPage() {
           onCellChange={handleCellChange}
           onToggleShipping={handleToggleShipping}
           onDuplicateRow={handleDuplicateRow}
+          bottomOffset={publishBarHeight}
         />
       )}
 
       {/* Sticky publish bar */}
       {dirtyRows.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur px-4 py-3">
+        <div
+          ref={(node) => setPublishBarHeight(node?.offsetHeight ?? 0)}
+          className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur px-4 py-3"
+        >
           <div className="max-w-[1400px] mx-auto flex items-center gap-2">
             <Button
               variant="outline"
