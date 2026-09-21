@@ -275,3 +275,34 @@ export function parseShippingOption(event: NostrEvent): ShippingOption | undefin
     countries: tagValues(event.tags, 'country'),
   };
 }
+
+/**
+ * Drop events retracted by NIP-09 deletion requests (kind 5). Only deletions
+ * signed by the event's own author count. An `e` tag removes that exact
+ * event; an `a` tag removes every version of the address created at or
+ * before the deletion — so a shipping option re-published afterwards under
+ * the same `d` tag shows up again.
+ */
+export function withoutDeleted(events: NostrEvent[], deletions: NostrEvent[]): NostrEvent[] {
+  const deletedIds = new Set<string>();
+  /** Address "<kind>:<pubkey>:<d>" → newest deletion timestamp. */
+  const deletedAddrs = new Map<string, number>();
+
+  for (const del of deletions) {
+    if (del.kind !== 5) continue;
+    for (const [name, value] of del.tags) {
+      if (!value) continue;
+      if (name === 'e') {
+        deletedIds.add(`${del.pubkey}:${value}`);
+      } else if (name === 'a' && value.split(':')[1] === del.pubkey) {
+        deletedAddrs.set(value, Math.max(deletedAddrs.get(value) ?? 0, del.created_at));
+      }
+    }
+  }
+
+  return events.filter((ev) => {
+    if (deletedIds.has(`${ev.pubkey}:${ev.id}`)) return false;
+    const deletedAt = deletedAddrs.get(`${ev.kind}:${ev.pubkey}:${tagValue(ev.tags, 'd') ?? ''}`);
+    return deletedAt === undefined || ev.created_at > deletedAt;
+  });
+}
