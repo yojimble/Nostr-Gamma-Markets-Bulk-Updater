@@ -80,9 +80,9 @@ describe('serializeListing', () => {
     expect(tags).toContainEqual(['t', 'clothing']);
     expect(tags).toContainEqual(['t', 'hats']);
     expect(tags).toContainEqual(['shipping_option', '30406:merchant:eu-standard']);
-    // Unmanaged tags carried verbatim:
     expect(tags).toContainEqual(['image', 'https://example.com/hat.jpg', '800x600', '1']);
     expect(tags).toContainEqual(['spec', 'color', 'red']);
+    // Unmanaged tags carried verbatim:
     expect(tags).toContainEqual(['weight', '0.2', 'kg']);
     expect(tags).toContainEqual(['published_at', '1690000000']);
   });

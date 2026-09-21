@@ -31,6 +31,12 @@ export interface ListingImage {
   dimensions: string;
 }
 
+/** One `spec` tag: `["spec", <key>, <value>]`, e.g. ("screen-size", "21 inch"). */
+export interface ListingSpec {
+  key: string;
+  value: string;
+}
+
 /** The editable fields of a listing, decoded from event tags. */
 export interface ListingData {
   title: string;
@@ -50,6 +56,8 @@ export interface ListingData {
   shippingRefs: string[];
   /** Product images, in display order — the first one is the primary image. */
   images: ListingImage[];
+  /** Product specifications, in tag order. A key MAY repeat. */
+  specs: ListingSpec[];
 }
 
 /** One row of the spreadsheet. */
@@ -120,6 +128,9 @@ export function parseListing(event: NostrEvent): ListingData {
     description: event.content,
     shippingRefs: tagValues(event.tags, 'shipping_option'),
     images: parseImages(event.tags),
+    specs: event.tags
+      .filter(([t, key]) => t === 'spec' && key !== undefined)
+      .map(([, key, value]) => ({ key, value: value ?? '' })),
   };
 }
 
@@ -136,6 +147,7 @@ export function splitCategories(categories: string): string[] {
 const MANAGED_TAGS = new Set([
   'title', 'price', 'stock', 'quantity', 'status', 'visibility',
   't', 'location', 'summary', 'shipping_option', 'd', 'client', 'image',
+  'spec',
 ]);
 
 /**
@@ -181,7 +193,17 @@ export function serializeListing(row: ListingRow): string[][] {
     tags.push(['image', img.url, img.dimensions, String(i + 1)]);
   });
 
+  // Rows left with a blank key are dropped rather than published half-filled.
+  for (const spec of data.specs) {
+    const key = spec.key.trim();
+    if (key) tags.push(['spec', key, spec.value.trim()]);
+  }
+
   return tags;
+}
+
+function serializeSpecs(specs: ListingSpec[]): string {
+  return specs.map((s) => `${s.key}\u0000${s.value}`).join('\n');
 }
 
 function serializeImages(images: ListingImage[]): string {
@@ -204,7 +226,8 @@ export function isRowDirty(row: ListingRow): boolean {
     a.summary !== b.summary ||
     a.description !== b.description ||
     a.shippingRefs.join('\n') !== b.shippingRefs.join('\n') ||
-    serializeImages(a.images) !== serializeImages(b.images)
+    serializeImages(a.images) !== serializeImages(b.images) ||
+    serializeSpecs(a.specs) !== serializeSpecs(b.specs)
   );
 }
 
@@ -214,6 +237,7 @@ export function cloneListingData(data: ListingData): ListingData {
     ...data,
     shippingRefs: [...data.shippingRefs],
     images: data.images.map((i) => ({ ...i })),
+    specs: data.specs.map((s) => ({ ...s })),
   };
 }
 

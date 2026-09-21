@@ -18,7 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { SettingsSheet } from '@/components/SettingsSheet';
-import { BulkToolbar, type CategoryEditMode, type PriceEditMode, type ShippingEditMode, type TitleEditMode } from '@/components/bulk/BulkToolbar';
+import { BulkToolbar, type CategoryEditMode, type PriceEditMode, type ShippingEditMode, type SpecEditMode, type TitleEditMode } from '@/components/bulk/BulkToolbar';
 import { ListingsTable } from '@/components/bulk/ListingsTable';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -279,6 +279,23 @@ export default function BulkEditorPage() {
     );
   };
 
+  const handleBulkSpec = (mode: SpecEditMode, key: string, value: string) => {
+    updateRows(selected, (d) => {
+      const others = d.specs.filter((s) => s.key.trim() !== key);
+      if (mode === 'remove') return { specs: others };
+      // Keep the spec where it was; collapse any duplicates of the key into it.
+      const at = d.specs.findIndex((s) => s.key.trim() === key);
+      const specs = [...others];
+      specs.splice(at === -1 ? specs.length : at, 0, { key, value });
+      return { specs };
+    });
+    toast.success(
+      mode === 'set'
+        ? `Spec “${key}” set on ${selected.size} listing${selected.size === 1 ? '' : 's'}.`
+        : `Spec “${key}” removed from ${selected.size} listing${selected.size === 1 ? '' : 's'}.`,
+    );
+  };
+
   const duplicateIds = (ids: Set<string>) => {
     const copies: string[] = [];
     setRows((prev) => {
@@ -447,6 +464,7 @@ export default function BulkEditorPage() {
             onBulkStatus={handleBulkStatus}
             onBulkShipping={handleBulkShipping}
             onBulkLocation={handleBulkLocation}
+            onBulkSpec={handleBulkSpec}
             onDuplicate={handleDuplicateSelected}
             onDelete={handleDeleteSelected}
           />

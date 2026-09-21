@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, ImageOff, Truck } from 'lucide-react';
+import { Copy, ImageOff, ListChecks, Truck } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import { ImageEditor } from './ImageEditor';
 import { ShippingPicker } from './ShippingPicker';
+import { SpecEditor } from './SpecEditor';
 import {
   LISTING_STATUSES,
   isRowDirty,
@@ -128,7 +129,7 @@ export function ListingsTable({
   return (
     <>
     <div ref={containerRef} className="rounded-lg border overflow-hidden">
-      <Table className="min-w-[1400px]">
+      <Table className="min-w-[1480px]">
         <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
           <TableRow className="hover:bg-transparent">
             <TableHead className="w-10">
@@ -147,6 +148,7 @@ export function ListingsTable({
             <TableHead className="w-20">Quantity</TableHead>
             <TableHead className="min-w-[180px]">Categories</TableHead>
             <TableHead className="min-w-[140px]">Location</TableHead>
+            <TableHead className="w-20">Specs</TableHead>
             <TableHead className="w-28">Shipping</TableHead>
             <TableHead className="w-32">Status</TableHead>
             <TableHead className="w-12"></TableHead>
@@ -290,6 +292,22 @@ export function ListingsTable({
                     onChange={(e) => onCellChange(row.id, { location: e.target.value })}
                     placeholder="—"
                   />
+                </TableCell>
+                <TableCell>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 px-2 gap-1.5" title="Edit specifications">
+                        <ListChecks className="h-4 w-4" />
+                        <span className="tabular-nums">{row.data.specs.length}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96" align="start">
+                      <SpecEditor
+                        specs={row.data.specs}
+                        onChange={(specs) => onCellChange(row.id, { specs })}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </TableCell>
                 <TableCell>
                   <Popover>

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Copy,
   FileText,
+  ListChecks,
   MapPin,
   Pencil,
   Tags,
@@ -61,6 +62,7 @@ export type TitleEditMode = 'replace' | 'set' | 'prefix' | 'suffix';
 export type CategoryEditMode = 'add' | 'remove' | 'set';
 export type PriceEditMode = 'set' | 'percent';
 export type ShippingEditMode = 'add' | 'replace' | 'clear';
+export type SpecEditMode = 'set' | 'remove';
 
 interface BulkToolbarProps {
   selectedCount: number;
@@ -72,11 +74,12 @@ interface BulkToolbarProps {
   onBulkStatus: (status: ListingStatus) => void;
   onBulkShipping: (mode: ShippingEditMode, refs: string[]) => void;
   onBulkLocation: (location: string) => void;
+  onBulkSpec: (mode: SpecEditMode, key: string, value: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-type OpenDialog = 'title' | 'description' | 'categories' | 'price' | 'shipping' | 'location' | null;
+type OpenDialog = 'title' | 'description' | 'categories' | 'price' | 'shipping' | 'location' | 'specs' | null;
 
 export function BulkToolbar({
   selectedCount,
@@ -88,6 +91,7 @@ export function BulkToolbar({
   onBulkStatus,
   onBulkShipping,
   onBulkLocation,
+  onBulkSpec,
   onDuplicate,
   onDelete,
 }: BulkToolbarProps) {
@@ -118,6 +122,11 @@ export function BulkToolbar({
 
   // Location dialog state
   const [locationInput, setLocationInput] = useState('');
+
+  // Specs dialog state
+  const [specMode, setSpecMode] = useState<SpecEditMode>('set');
+  const [specKey, setSpecKey] = useState('');
+  const [specValue, setSpecValue] = useState('');
 
   const disabled = selectedCount === 0;
 
@@ -157,6 +166,10 @@ export function BulkToolbar({
           <DropdownMenuItem onClick={() => setOpenDialog('location')}>
             <MapPin className="h-4 w-4 mr-2" />
             Location…
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setOpenDialog('specs')}>
+            <ListChecks className="h-4 w-4 mr-2" />
+            Specs…
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
@@ -453,6 +466,63 @@ export function BulkToolbar({
               onClick={() => {
                 onBulkLocation(locationInput.trim());
                 setLocationInput('');
+                close();
+              }}
+            >
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---- Specs dialog ---- */}
+      <Dialog open={openDialog === 'specs'} onOpenChange={(o) => !o && close()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk edit specs</DialogTitle>
+            <DialogDescription>
+              Applies to {selectedCount} selected listing{selectedCount === 1 ? '' : 's'}.
+              Keys match exactly (case-sensitive).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <RadioGroup value={specMode} onValueChange={(v) => setSpecMode(v as SpecEditMode)} className="grid grid-cols-2 gap-2">
+              <Label className="flex items-center gap-2 rounded-md border p-2 cursor-pointer">
+                <RadioGroupItem value="set" /> Set spec
+              </Label>
+              <Label className="flex items-center gap-2 rounded-md border p-2 cursor-pointer">
+                <RadioGroupItem value="remove" /> Remove spec
+              </Label>
+            </RadioGroup>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Key, e.g. author"
+                className={specMode === 'set' ? 'w-40' : undefined}
+                value={specKey}
+                onChange={(e) => setSpecKey(e.target.value)}
+              />
+              {specMode === 'set' && (
+                <Input
+                  placeholder="Value"
+                  value={specValue}
+                  onChange={(e) => setSpecValue(e.target.value)}
+                />
+              )}
+            </div>
+            {specMode === 'set' && (
+              <p className="text-xs text-muted-foreground">
+                Replaces the value where the key already exists; adds the spec otherwise.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={close}>Cancel</Button>
+            <Button
+              disabled={!specKey.trim()}
+              onClick={() => {
+                onBulkSpec(specMode, specKey.trim(), specValue.trim());
+                setSpecKey('');
+                setSpecValue('');
                 close();
               }}
             >
