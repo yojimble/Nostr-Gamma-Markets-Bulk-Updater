@@ -4,24 +4,55 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useUploadFile } from '@/hooks/useUploadFile';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { uploadBatch } from '@/lib/blossom';
 import { cn } from '@/lib/utils';
 import type { ListingImage } from '@/lib/gamma';
+
+/**
+ * Read a file's pixel size as "<width>x<height>" (the `image` tag's
+ * dimensions format). Blossom servers don't report dimensions, so they are
+ * measured locally before upload. Empty string if the browser can't decode it.
+ */
+async function measureImage(file: File): Promise<string> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const dims = `${bitmap.width}x${bitmap.height}`;
+    bitmap.close();
+    return dims;
+  } catch {
+    return '';
+  }
+}
+
+/** Same as `measureImage`, for an image URL. Gives up after 5 s. */
+function measureUrl(url: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => resolve(''), 5000);
+    img.onload = () => {
+      clearTimeout(timer);
+      resolve(img.naturalWidth ? `${img.naturalWidth}x${img.naturalHeight}` : '');
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      resolve('');
+    };
+    img.src = url;
+  });
+}
 
 interface ImageEditorProps {
   images: ListingImage[];
   onChange: (images: ListingImage[]) => void;
 }
 
-/** Read the URL and pixel dimensions out of the uploader's NIP-94 tags. */
-function imageFromUploadTags(tags: string[][]): ListingImage {
-  const url = tags.find(([t]) => t === 'url')?.[1] ?? tags[0]?.[1] ?? '';
-  return { url, dimensions: tags.find(([t]) => t === 'dim')?.[1] ?? '' };
-}
-
 export function ImageEditor({ images, onChange }: ImageEditorProps) {
-  const { mutateAsync: uploadFile, isPending: isUploading } = useUploadFile();
+  const { user } = useCurrentUser();
   const [newUrl, setNewUrl] = useState('');
+  /** Batch progress while uploading; null when idle. */
+  const [progress, setProgress] = useState<{ done: number; total: number; signed: boolean } | null>(null);
+  const isUploading = progress !== null;
   // Index being replaced, or -1 when the picker should append.
   const targetIndex = useRef(-1);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -29,23 +60,55 @@ export function ImageEditor({ images, onChange }: ImageEditorProps) {
   const replaceAt = (index: number, image: ListingImage) =>
     onChange(images.map((img, i) => (i === index ? image : img)));
 
-  const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+  /**
+   * Upload one file (replace) or several (append). The whole selection is
+   * authorized with one signature, so the signer prompts once per batch.
+   * Successful uploads are kept even if others fail.
+   */
+  const handleFiles = async (files: File[]) => {
+    if (files.length === 0 || !user) return;
     const index = targetIndex.current;
+
+    setProgress({ done: 0, total: files.length, signed: false });
+    const dimensions = await Promise.all(files.map(measureImage));
+    let results;
     try {
-      const image = imageFromUploadTags(await uploadFile(file));
-      if (!image.url) throw new Error('Uploader returned no URL');
-      if (index >= 0) replaceAt(index, image);
-      else onChange([...images, image]);
+      results = await uploadBatch(files, user.signer, (done, total) => setProgress({ done, total, signed: true }));
     } catch (err) {
-      console.error('image upload failed', err);
-      toast.error('Upload failed. Try a different file or check your signer.');
+      // Signing was refused or failed — nothing was uploaded.
+      console.error('upload authorization failed', err);
+      toast.error('Upload not authorized. Check your signer and try again.');
+      return;
+    } finally {
+      setProgress(null);
+    }
+
+    const uploaded: ListingImage[] = results.flatMap((r, i) =>
+      r.blob ? [{ url: r.blob.url, dimensions: dimensions[i] }] : [],
+    );
+    const failed = results.length - uploaded.length;
+    for (const r of results) if (r.error) console.error(`image upload failed: ${r.file.name}`, r.error);
+
+    if (uploaded.length > 0) {
+      if (index >= 0) replaceAt(index, uploaded[0]);
+      else onChange([...images, ...uploaded]);
+    }
+    if (failed > 0) {
+      toast.error(
+        files.length === 1
+          ? 'Upload failed. Try a different file or check your signer.'
+          : `${failed} of ${files.length} uploads failed. Try those files again or check your signer.`,
+      );
     }
   };
 
   const pickFile = (index: number) => {
     targetIndex.current = index;
-    fileInput.current?.click();
+    // Replacing swaps one image; appending takes any number.
+    if (fileInput.current) {
+      fileInput.current.multiple = index < 0;
+      fileInput.current.click();
+    }
   };
 
   const move = (index: number, delta: number) => {
@@ -55,11 +118,11 @@ export function ImageEditor({ images, onChange }: ImageEditorProps) {
     onChange(next);
   };
 
-  const addUrl = () => {
+  const addUrl = async () => {
     const url = newUrl.trim();
     if (!url) return;
-    onChange([...images, { url, dimensions: '' }]);
     setNewUrl('');
+    onChange([...images, { url, dimensions: await measureUrl(url) }]);
   };
 
   return (
@@ -68,7 +131,12 @@ export function ImageEditor({ images, onChange }: ImageEditorProps) {
         <p className="text-sm font-medium">
           Images{images.length > 0 && <span className="text-muted-foreground"> · {images.length}</span>}
         </p>
-        {isUploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {progress && (
+          <span className="flex items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {progress.signed && progress.total > 1 && `${Math.min(progress.done + 1, progress.total)}/${progress.total}`}
+          </span>
+        )}
       </div>
 
       {images.length === 0 && (
@@ -157,7 +225,11 @@ export function ImageEditor({ images, onChange }: ImageEditorProps) {
           onClick={() => pickFile(-1)}
         >
           <Plus className={cn('mr-2 h-4 w-4', isUploading && 'hidden')} />
-          {isUploading ? 'Uploading…' : 'Upload image'}
+          {!progress
+            ? 'Upload images'
+            : !progress.signed
+              ? 'Waiting for signature…'
+              : `Uploading${progress.total > 1 ? ` ${Math.min(progress.done + 1, progress.total)} of ${progress.total}` : ''}…`}
         </Button>
         <div className="flex gap-1">
           <Input
@@ -177,7 +249,7 @@ export function ImageEditor({ images, onChange }: ImageEditorProps) {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          The first image is the listing's main image. Changes are published with the rest of your edits.
+          Select several files at once — they upload together after a single signature. The first image is the listing's main image. Changes are published with the rest of your edits.
         </p>
       </div>
 
@@ -187,8 +259,8 @@ export function ImageEditor({ images, onChange }: ImageEditorProps) {
         accept="image/*"
         className="hidden"
         onChange={(e) => {
-          handleFile(e.target.files?.[0]);
-          // Allow re-selecting the same file after a failed upload.
+          handleFiles(Array.from(e.target.files ?? []));
+          // Allow re-selecting the same files after a failed upload.
           e.target.value = '';
         }}
       />

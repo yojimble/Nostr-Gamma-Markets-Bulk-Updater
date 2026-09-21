@@ -9,10 +9,13 @@ NIP-99 classifieds / [Gamma Markets spec](https://github.com/GammaMarkets/market
 - Imports all your published kind 30402 listings and shows them in an editable spreadsheet
 - Inline-edit title, price, currency, stock, status, categories, location and summary per row
 - **Images** — click a row's thumbnail to open the image editor:
-  - Upload a file (via Blossom) or paste an image URL
+  - Upload files (via Blossom) or paste an image URL. Select several files at once to
+    upload them as a batch — one signature authorizes the whole batch (a BUD-02
+    `kind 24242` event with one `x` tag per file)
   - Reorder with the up/down arrows — the first image is the listing's main image
-  - Replace or remove individual images; pixel dimensions from an upload are kept
-    in the `image` tag, and the sorting field is rewritten on publish
+  - Replace or remove individual images. Uploads are measured in the browser and
+    their pixel dimensions written to the `image` tag (existing dimensions are kept);
+    the sorting field is rewritten on publish
 - Bulk toolbar for selected rows:
   - **Title** — find & replace, set, prefix, suffix
   - **Categories** — add, remove or replace `t` tags
