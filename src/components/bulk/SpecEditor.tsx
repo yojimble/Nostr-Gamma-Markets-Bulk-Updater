@@ -37,14 +37,20 @@ export function SpecEditor({ specs, onChange }: SpecEditorProps) {
       )}
 
       <div className="space-y-1.5">
+        {specs.length > 0 && (
+          <div className="flex gap-1 text-xs text-muted-foreground">
+            <span className="w-32 px-1">Name</span>
+            <span className="flex-1 px-1">Value</span>
+          </div>
+        )}
         {specs.map((spec, index) => (
           <div key={index} className="flex items-center gap-1">
             <Input
               className="h-8 w-32 text-xs"
               value={spec.key}
               onChange={(e) => replaceAt(index, { ...spec, key: e.target.value })}
-              placeholder="key"
-              aria-label="Spec key"
+              placeholder="name"
+              aria-label="Spec name"
             />
             <Input
               className="h-8 flex-1 text-xs"
@@ -77,13 +83,13 @@ export function SpecEditor({ specs, onChange }: SpecEditorProps) {
           <Input
             className="h-8 w-32 text-xs"
             value={newKey}
-            placeholder="e.g. author"
+            placeholder="Name, e.g. author"
             onChange={(e) => setNewKey(e.target.value)}
           />
           <Input
             className="h-8 flex-1 text-xs"
             value={newValue}
-            placeholder="e.g. Satoshi"
+            placeholder="Value, e.g. Satoshi"
             onChange={(e) => setNewValue(e.target.value)}
           />
           <Button type="submit" variant="secondary" size="sm" className="h-8" disabled={!newKey.trim()}>
@@ -91,7 +97,7 @@ export function SpecEditor({ specs, onChange }: SpecEditorProps) {
           </Button>
         </form>
         <p className="text-xs text-muted-foreground">
-          Published as <code>["spec", key, value]</code> tags. Rows with an empty key are dropped.
+          Published as <code>["spec", name, value]</code> tags. Rows with an empty name are dropped.
         </p>
       </div>
     </div>

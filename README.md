@@ -21,7 +21,7 @@ NIP-99 classifieds / [Gamma Markets spec](https://github.com/GammaMarkets/market
     The NIP-99 `status` tag is written alongside for classified clients
     (`sold` for hidden items, `active` otherwise) but never shown in the UI
   - **Shipping** — apply your published kind 30406 shipping options (`shipping_option` tags)
-  - **Specs** — set a `spec` key/value on every selected listing, or remove a key.
+  - **Specs** — set a `spec` name/value on every selected listing, or remove a spec by name.
     Each row's specs are also editable from its **Specs** column
   - **Duplicate** — clone listings; every new listing gets a fresh unique `d` identifier (UUID)
 - Nothing is published until you hit **Publish** — edited rows are highlighted, and

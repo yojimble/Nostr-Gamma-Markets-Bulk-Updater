@@ -482,7 +482,7 @@ export function BulkToolbar({
             <DialogTitle>Bulk edit specs</DialogTitle>
             <DialogDescription>
               Applies to {selectedCount} selected listing{selectedCount === 1 ? '' : 's'}.
-              Keys match exactly (case-sensitive).
+              Spec names match exactly (case-sensitive).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -496,7 +496,7 @@ export function BulkToolbar({
             </RadioGroup>
             <div className="flex gap-2">
               <Input
-                placeholder="Key, e.g. author"
+                placeholder="Name, e.g. author"
                 className={specMode === 'set' ? 'w-40' : undefined}
                 value={specKey}
                 onChange={(e) => setSpecKey(e.target.value)}
@@ -511,7 +511,7 @@ export function BulkToolbar({
             </div>
             {specMode === 'set' && (
               <p className="text-xs text-muted-foreground">
-                Replaces the value where the key already exists; adds the spec otherwise.
+                Replaces the value where the name already exists; adds the spec otherwise.
               </p>
             )}
           </div>
